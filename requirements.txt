@@ -1,0 +1,10 @@
+streamlit>=1.30.0
+pandas
+plotly
+folium
+streamlit-folium
+requests
+langchain
+langchain-ollama
+langchain-core
+streamlit-option-menu
