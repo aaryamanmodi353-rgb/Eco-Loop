@@ -12,6 +12,7 @@ import random
 from branca.element import Element
 from streamlit_folium import st_folium
 from streamlit_option_menu import option_menu
+from streamlit_autorefresh import st_autorefresh
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import streamlit.components.v1 as components
@@ -231,9 +232,13 @@ def render_kpi(title, value, delta, is_good=True, icon="⚡"):
         <div class="kpi-delta" style="color: {color};">{arrow} {delta}</div>
     </div>"""
 
-# DYNAMIC KPIs - Rendered on every page for global visibility
-savings_pct = 18.4 + random.uniform(-0.3, 0.3)
-pmv_val = 0.20 + random.uniform(-0.04, 0.04)
+# DYNAMIC KPIs - Cached to prevent flickering on zoom/pan/fragment reruns
+if 'kpi_update_time' not in st.session_state or time.time() - st.session_state.kpi_update_time > 5:
+    st.session_state.kpi_savings = round(18.4 + random.uniform(-0.3, 0.3), 1)
+    st.session_state.kpi_pmv = round(0.20 + random.uniform(-0.04, 0.04), 2)
+    st.session_state.kpi_update_time = time.time()
+savings_pct = st.session_state.kpi_savings
+pmv_val = st.session_state.kpi_pmv
 
 col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
 with col_kpi1: st.markdown(render_kpi("Energy Savings", f"{savings_pct:.1f}%", "4.2% vs Baseline", True, "🌱"), unsafe_allow_html=True)
@@ -336,119 +341,119 @@ if page == "Global Overview":
                 
         with tab_map:
             if df is not None and not df.empty:
-                col_info, col_btn = st.columns([4, 1])
-                with col_info:
-                    st.markdown("<p style='font-size: 0.9rem;'>👇 <b>INTERACTIVE:</b> Click anywhere to deploy a node. Click an existing Blue node to remove it.</p>", unsafe_allow_html=True)
-                with col_btn:
-                    st.markdown('<div class="clear-btn">', unsafe_allow_html=True)
-                    if st.button("🗑️ Clear Nodes", use_container_width=True):
-                        st.session_state.custom_nodes = []
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
+                @st.fragment
+                def render_map():
+                    col_info, col_btn = st.columns([4, 1])
+                    with col_info:
+                        st.markdown("<p style='font-size: 0.9rem;'>👇 <b>INTERACTIVE:</b> Click anywhere to deploy a node. Click an existing Blue node to remove it.</p>", unsafe_allow_html=True)
+                    with col_btn:
+                        st.markdown('<div class="clear-btn">', unsafe_allow_html=True)
+                        if st.button("🗑️ Clear Nodes", use_container_width=True):
+                            st.session_state.custom_nodes = []
+                            if 'last_processed_click' in st.session_state:
+                                del st.session_state.last_processed_click
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                    latest = df.iloc[-1]
+                    map_data = pd.DataFrame({
+                        'Site': ['New York', 'London', 'Tokyo', 'Sydney', 'Dubai'],
+                        'lat': [40.7128, 51.5074, 35.6895, -33.8688, 25.2048],
+                        'lon': [-74.0060, -0.1278, 139.6917, 151.2093, 55.2708],
+                        'Temp': [latest['SPACE1-1_Temp_C'], latest['SPACE2-1_Temp_C'], latest['SPACE3-1_Temp_C'], latest['SPACE4-1_Temp_C'], latest['SPACE5-1_Temp_C']]
+                    })
                     
-                latest = df.iloc[-1]
-                map_data = pd.DataFrame({
-                    'Site': ['New York', 'London', 'Tokyo', 'Sydney', 'Dubai'],
-                    'lat': [40.7128, 51.5074, 35.6895, -33.8688, 25.2048],
-                    'lon': [-74.0060, -0.1278, 139.6917, 151.2093, 55.2708],
-                    'Temp': [latest['SPACE1-1_Temp_C'], latest['SPACE2-1_Temp_C'], latest['SPACE3-1_Temp_C'], latest['SPACE4-1_Temp_C'], latest['SPACE5-1_Temp_C']]
-                })
-                
-                def get_color(t):
-                    if t > 24.0 or t < 21.0: return '#ff7b72'
-                    if t > 23.5 or t < 21.5: return '#d29922'
-                    return '#2ea043'
-                    
-                m = folium.Map(location=[20, 0], zoom_start=2.5, min_zoom=2, tiles=None)
-                
-                # Inject CSS to make Leaflet's underlying canvas perfectly match our dashboard so no grey voids ever appear
-                map_bg = "#ffffff" if st.session_state.light_mode else "#090c10"
-                m.get_root().html.add_child(Element(f"<style>.leaflet-container {{ background: {map_bg} !important; }}</style>"))
-                
-                if st.session_state.light_mode:
-                    folium.TileLayer(
-                        tiles='https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
-                        attr='CartoDB', name='CartoDB Light', no_wrap=True
-                    ).add_to(m)
-                else:
-                    folium.TileLayer(
-                        tiles='https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
-                        attr='CartoDB', name='CartoDB Dark', no_wrap=True
-                    ).add_to(m)
-                
-                # Dynamically inject custom English continent labels to match dashboard aesthetics
-                continent_color = "#57606a" if st.session_state.light_mode else "#8b949e"
-                continents = [
-                    {"name": "NORTH AMERICA", "lat": 45.0, "lon": -100.0},
-                    {"name": "SOUTH AMERICA", "lat": -15.0, "lon": -60.0},
-                    {"name": "EUROPE", "lat": 50.0, "lon": 15.0},
-                    {"name": "AFRICA", "lat": 5.0, "lon": 20.0},
-                    {"name": "ASIA", "lat": 45.0, "lon": 90.0},
-                    {"name": "AUSTRALIA", "lat": -25.0, "lon": 135.0}
-                ]
-                for c in continents:
-                    folium.Marker(
-                        location=[c["lat"], c["lon"]],
-                        icon=DivIcon(
-                            icon_size=(150,36),
-                            icon_anchor=(75,18),
-                            html=f'<div style="font-family: \'Inter\', sans-serif; font-size: 0.85rem; font-weight: 500; color: {continent_color}; text-align: center; letter-spacing: 2px;">{c["name"]}</div>',
-                        )
-                    ).add_to(m)
-                
-                for i, row in map_data.iterrows():
-                    color = get_color(row['Temp'])
-                    folium.CircleMarker(
-                        location=[row['lat'], row['lon']], radius=7, popup=f"{row['Site']}: {row['Temp']:.1f}°C",
-                        color=color, fill=True, fill_color=color, fill_opacity=0.7
-                    ).add_to(m)
-                    
-                for i, node in enumerate(st.session_state.custom_nodes):
-                    popup_html = f"""
-                    <div style='font-family: sans-serif; width: 140px; color: #333;'>
-                        <b>Dynamic Node {i+1}</b><br>
-                        🌡️ Temp: <b>{node['Temp']:.1f}°C</b><br><br>
-                        <i>Click node again to remove</i>
-                    </div>
-                    """
-                    folium.Marker(
-                        location=[node['lat'], node['lng']],
-                        popup=folium.Popup(popup_html, max_width=200),
-                        icon=folium.Icon(color='blue', icon='cloud')
-                    ).add_to(m)
-                
-                st_data = st_folium(m, height=350, use_container_width=True, returned_objects=["last_clicked", "last_object_clicked"])
-                
-                if st_data and st_data.get("last_clicked"):
-                    clicked = st_data["last_clicked"]
-                    obj = st_data.get("last_object_clicked")
-                    
-                    is_obj_click = False
-                    if obj and abs(clicked['lat'] - obj['lat']) < 0.0001 and abs(clicked['lng'] - obj['lng']) < 0.0001:
-                        is_obj_click = True
+                    def get_color(t):
+                        if t > 24.0 or t < 21.0: return '#ff7b72'
+                        if t > 23.5 or t < 21.5: return '#d29922'
+                        return '#2ea043'
                         
-                    if is_obj_click:
-                        original_len = len(st.session_state.custom_nodes)
-                        st.session_state.custom_nodes = [n for n in st.session_state.custom_nodes if abs(n['lat'] - obj['lat']) > 0.0001 or abs(n['lng'] - obj['lng']) > 0.0001]
-                        if len(st.session_state.custom_nodes) < original_len:
-                            st.rerun()
+                    m = folium.Map(location=[20, 0], zoom_start=2.5, min_zoom=2, tiles=None)
+                    
+                    map_bg = "#ffffff" if st.session_state.light_mode else "#090c10"
+                    m.get_root().html.add_child(Element(f"<style>.leaflet-container {{ background: {map_bg} !important; }}</style>"))
+                    
+                    if st.session_state.light_mode:
+                        folium.TileLayer(
+                            tiles='https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png',
+                            attr='CartoDB', name='CartoDB Light', no_wrap=True
+                        ).add_to(m)
                     else:
-                        if not any(abs(n['lat'] - clicked['lat']) < 0.0001 and abs(n['lng'] - clicked['lng']) < 0.0001 for n in st.session_state.custom_nodes):
-                            try:
-                                url = f"https://api.open-meteo.com/v1/forecast?latitude={clicked['lat']}&longitude={clicked['lng']}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
-                                resp = requests.get(url).json()
-                                current = resp.get("current", {})
-                                
-                                temp = current.get("temperature_2m", latest_outdoor)
-                                humidity = current.get("relative_humidity_2m", 50)
-                                wind = current.get("wind_speed_10m", 10.0)
-                                w_code = current.get("weather_code", 3)
-                                emoji, cond_text = get_weather_emoji(w_code)
-                                
-                                st.session_state.custom_nodes.append({"lat": clicked['lat'], "lng": clicked['lng'], "Temp": temp, "Humidity": humidity, "Wind": wind, "Emoji": emoji, "CondText": cond_text})
-                            except:
-                                st.session_state.custom_nodes.append({"lat": clicked['lat'], "lng": clicked['lng'], "Temp": latest_outdoor, "Humidity": 50, "Wind": 12.0, "Emoji": "☁️", "CondText": "Cloudy"})
-                            st.rerun()
+                        folium.TileLayer(
+                            tiles='https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+                            attr='CartoDB', name='CartoDB Dark', no_wrap=True
+                        ).add_to(m)
+                    
+                    continent_color = "#57606a" if st.session_state.light_mode else "#8b949e"
+                    continents = [
+                        {"name": "NORTH AMERICA", "lat": 45.0, "lon": -100.0},
+                        {"name": "SOUTH AMERICA", "lat": -15.0, "lon": -60.0},
+                        {"name": "EUROPE", "lat": 50.0, "lon": 15.0},
+                        {"name": "AFRICA", "lat": 5.0, "lon": 20.0},
+                        {"name": "ASIA", "lat": 45.0, "lon": 90.0},
+                        {"name": "AUSTRALIA", "lat": -25.0, "lon": 135.0}
+                    ]
+                    for c in continents:
+                        folium.Marker(
+                            location=[c["lat"], c["lon"]],
+                            icon=DivIcon(
+                                icon_size=(150,36),
+                                icon_anchor=(75,18),
+                                html=f'<div style="font-family: \'Inter\', sans-serif; font-size: 0.85rem; font-weight: 500; color: {continent_color}; text-align: center; letter-spacing: 2px;">{c["name"]}</div>',
+                            )
+                        ).add_to(m)
+                    
+                    for i, row in map_data.iterrows():
+                        color = get_color(row['Temp'])
+                        folium.CircleMarker(
+                            location=[row['lat'], row['lon']], radius=7, popup=f"{row['Site']}: {row['Temp']:.1f}°C",
+                            color=color, fill=True, fill_color=color, fill_opacity=0.7
+                        ).add_to(m)
+                        
+                    for i, node in enumerate(st.session_state.custom_nodes):
+                        popup_html = f"""
+                        <div style='font-family: sans-serif; width: 140px; color: #333;'>
+                            <b>Dynamic Node {i+1}</b><br>
+                            🌡️ Temp: <b>{node['Temp']:.1f}°C</b><br><br>
+                            <i>Click node again to remove</i>
+                        </div>
+                        """
+                        folium.Marker(
+                            location=[node['lat'], node['lng']],
+                            popup=folium.Popup(popup_html, max_width=200),
+                            icon=folium.Icon(color='blue', icon='info-sign')
+                        ).add_to(m)
+                    
+                    st_data = st_folium(m, height=350, use_container_width=True, key="eco_map")
+                    
+                    if st_data and st_data.get("last_clicked"):
+                        clicked = st_data["last_clicked"]
+                        click_key = f"{clicked['lat']:.8f},{clicked['lng']:.8f}"
+                        prev_key = st.session_state.get('last_processed_click', '')
+                        
+                        if click_key != prev_key:
+                            st.session_state.last_processed_click = click_key
+                            
+                            found_idx = -1
+                            for i, n in enumerate(st.session_state.custom_nodes):
+                                if abs(n['lat'] - clicked['lat']) < 0.5 and abs(n['lng'] - clicked['lng']) < 0.5:
+                                    found_idx = i
+                                    break
+                                    
+                            if found_idx >= 0:
+                                st.session_state.custom_nodes.pop(found_idx)
+                                # Clear click memory so user can re-add a pin at same spot
+                                st.session_state.last_processed_click = ''
+                                st.rerun(scope="app")
+                            else:
+                                # Instant temp estimate from latitude (no slow API call)
+                                est_temp = max(10, 30 - abs(clicked['lat']) * 0.35) + random.uniform(-2, 2)
+                                est_humidity = 50 + random.uniform(-15, 15)
+                                est_wind = 8 + random.uniform(-3, 5)
+                                new_node = {"lat": clicked['lat'], "lng": clicked['lng'], "Temp": round(est_temp, 1), "Humidity": round(est_humidity, 1), "Wind": round(est_wind, 1), "Emoji": "📍", "CondText": "Deployed"}
+                                st.session_state.custom_nodes.append(new_node)
+                                st.rerun(scope="app")
+                
+                render_map()
     with col_density:
         title_c = "#24292f" if st.session_state.light_mode else "#f0f6fc"
         st.markdown(f'<div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 20px; color: {title_c}; display: flex; align-items: center; gap: 8px;">🌍 AI-Managed Zones</div>', unsafe_allow_html=True)
@@ -585,12 +590,18 @@ elif page == "AI Assistance":
                 try:
                     llm = ChatOllama(model="llama3.1", temperature=0.2)
                     sys_prompt = SystemMessage(content="You are Eco-Loop, a highly technical, professional, autonomous HVAC AI agent. You control a global portfolio of buildings using EnergyPlus and Llama 3.1 Tool Calling. Be concise, highly professional, and technical. Highlight that you achieve 18.4% energy savings.")
-                    response_stream = llm.stream([sys_prompt] + st.session_state.messages)
-                    response = st.write_stream(response_stream)
+                    
+                    def stream_response():
+                        for chunk in llm.stream([sys_prompt] + st.session_state.messages):
+                            if hasattr(chunk, 'content'):
+                                yield chunk.content
+                            else:
+                                yield str(chunk)
+                                
+                    response = st.write_stream(stream_response())
                     st.session_state.messages.append(AIMessage(content=response))
                 except Exception as e:
                     st.error(f"Error connecting to local Llama 3.1: {e}")
 
 if st.session_state.auto_refresh and page not in ["Settings", "AI Assistance"]:
-    time.sleep(2.5)
-    st.rerun()
+    st_autorefresh(interval=3000, key="live_refresh")

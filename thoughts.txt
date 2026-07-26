@@ -1,5 +1,11 @@
-No explicit reasoning provided.
+} 
+
+Then, based on the response from get_building_state, you would need to analyze the zone temperatures and outdoor temperature to determine the new setpoints.
+
+Assuming the response from get_building_state is:
+{"type":"function","name":"get_building_state","parameters":{},"result":{"zone_temperatures":[21.5, 22.0, 23.2, 20.8, 21.9],"outdoor_temperature":15.6}}
+
+You would then call the set_hvac_setpoints function with the following arguments:
+{"name": "set_hvac_setpoints", "parameters": {"heating_setpoint": 16.5, "cooling_setpoint": 24.0}}
 
 **Action:** Called `get_building_state` with {}
-
-**Action:** Called `get_building_state` with {'heating_setpoint': 22, 'cooling_setpoint': 23.5}

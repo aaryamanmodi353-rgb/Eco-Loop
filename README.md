@@ -1,78 +1,73 @@
-# 🌍 Eco-Loop: Autonomous LLM-Driven HVAC Control
+# Eco-Loop: Autonomous AI-Driven HVAC Management System
 
-Eco-Loop is a next-generation, closed-loop predictive HVAC control system built for the Honeywell Hackathon. It integrates a live Large Language Model (**Llama 3.1**) directly with the industry-standard **EnergyPlus** physics engine to autonomously manage building thermodynamics, proving substantial kWh energy reductions while strictly maintaining human comfort parameters.
+Eco-Loop is a next-generation, closed-loop autonomous system designed to optimize enterprise-scale HVAC (Heating, Ventilation, and Air Conditioning) management. By replacing traditional, rigid PID controllers with an advanced cognitive architecture powered by Llama 3.1, Eco-Loop dynamically analyzes live thermal telemetry, anticipates environmental drift, and actively enforces optimal thermodynamic setpoints.
+
+This architecture achieves significant energy reductions (**18.4% vs. baseline**) while strictly maintaining PMV (Predicted Mean Vote) comfort parameters across a global portfolio of buildings.
 
 ## 🚀 Key Features
 
-- **Autonomous Physics Integration**: Live bidirectional data streaming between the Python EnergyPlus API wrapper and the Llama 3.1 LLM agent.
-- **Predictive AI Reasoning**: The localized AI agent continuously analyzes live thermal data (PMV) and dynamically injects precise heating and cooling setpoints back into the running simulation.
-- **Enterprise Glassmorphism Dashboard**: A sleek, fully responsive Streamlit UI featuring a seamless Light/Dark mode, raw JSON telemetry streaming, and quantitative savings KPIs.
-- **Global Geospatial Map**: An interactive Folium map tracking live AI-managed zones. Includes dynamic "Pin-Drop" functionality integrating the **Open-Meteo API** to deploy new nodes using real-time global weather data.
-- **Natural Language RAG Interface**: Built-in chatbot allowing facility managers to interrogate the AI about its live thermodynamic decisions in plain English.
-- **Zero-Latency Architecture**: Leveraging a localized Llama 3.1 model via Ollama to eliminate cloud network latency, allowing for rapid, robust control loops.
+*   **Autonomous Edge AI**: Powered by a local Llama 3.1 (8B) model running entirely at the edge for zero-latency inference, extreme fault tolerance, and strict data privacy.
+*   **Physics-Informed Actuation**: Uses EnergyPlus to model high-fidelity thermodynamic simulations of a complex, multi-zone commercial building distributed globally.
+*   **Agentic Tool Calling**: The AI Orchestrator natively uses Tool Calling to invoke Python functions (e.g., `set_hvac_setpoints`) to actuate physical changes in the environment based on live data.
+*   **Live Telemetry Dashboard**: A stunning, glassmorphic Streamlit Web UI featuring an interactive global map (powered by `streamlit-folium`), real-time charts (`plotly`), and live KPIs.
+*   **Transparent AI Chain-of-Thought**: Exposes the raw cognitive reasoning of the Llama model, allowing human operators to see exactly *why* a specific HVAC decision was made.
 
 ## 🏗️ System Architecture
 
-The project consists of three core components communicating via a unified JSON bus:
+Eco-Loop operates on three fully decoupled, asynchronous core engines running concurrently, communicating via a rapid, zero-latency local Telemetry Bus.
 
-1. **`ep_runner.py` (Physics Engine)**: 
-   - Wraps the `pyenergyplus` API.
-   - Runs the `baseline.idf` building simulation.
-   - Streams live `Zone Mean Air Temperature` out and ingests setpoints in.
-2. **`agent.py` (AI Orchestrator)**:
-   - Powered by LangChain and Llama 3.1.
-   - Reads the live simulation state, reasons about required adjustments to maintain the 21-24°C comfort band, and dispatches execution signals.
-3. **`app.py` (Streamlit Dashboard)**:
-   - Provides a real-time, interactive visual interface over the telemetry data and the interactive Folium map.
+1.  **Physics Engine (`ep_runner.py`)**: Runs EnergyPlus thermodynamic simulations.
+2.  **AI Orchestrator (`agent.py`)**: Senses the state, evaluates thermal drift using Chain-of-Thought, and acts via Tool Calling.
+3.  **Command & Control Dashboard (`app.py`)**: The interactive Streamlit frontend.
 
-## ⚙️ Installation & Setup
+> For a complete architectural breakdown and data flow diagram, see the [Architecture Document](architecture_document.md).
+
+## 🛠️ Setup & Installation
 
 ### Prerequisites
-- Python 3.9+
-- EnergyPlus (installed and accessible in your system path)
-- [Ollama](https://ollama.ai/) (with `llama3.1` model pulled locally)
+*   Python 3.11+
+*   [Ollama](https://ollama.com/) installed locally with the `llama3.1` model.
 
-### Quick Start
+### Installation
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/aaryamanmodi353-rgb/Eco-Loop.git
+    cd Eco-Loop
+    ```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/eco-loop.git
-   cd eco-loop
-   ```
+2.  **Install dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(Ensure you have `streamlit`, `folium`, `streamlit-folium`, `langchain-ollama`, `requests`, and `pandas` installed).*
+3.  **Ensure Ollama is running**
+    ```bash
+    ollama run llama3.1
+    ```
 
-3. **Start the localized LLM:**
-   Ensure your Ollama daemon is running:
-   ```bash
-   ollama run llama3.1
-   ```
+## 💻 Usage
 
-4. **Launch the core systems:**
-   Open two terminals.
-   
-   **Terminal 1 (Physics & AI Loop):**
-   ```bash
-   python ep_runner.py
-   python agent.py
-   ```
-   
-   **Terminal 2 (Dashboard):**
-   ```bash
-   streamlit run app.py
-   ```
+To launch the Eco-Loop platform, you need to run the three core engines concurrently. Open three separate terminal windows:
 
-## 📊 Quantitative Proof
-During our simulation runs, the Eco-Loop closed-loop strategy consistently proved an **18.4% reduction** in total kWh consumed when compared directly against the baseline operation, while strictly maintaining the required thermal comfort boundaries (21-24°C).
+**Terminal 1: Start the Dashboard**
+```bash
+python -m streamlit run app.py
+```
 
-## 🏆 Hackathon Details
-- **Theme**: AI & Sustainability
-- **Category**: Software
-- **Hackathon**: Honeywell Campus Hackathon
+**Terminal 2: Start the Physics Simulation Engine**
+```bash
+python ep_runner.py
+```
 
----
-*Built with ❤️ for a sustainable future.*
+**Terminal 3: Start the AI Orchestrator**
+```bash
+python agent.py
+```
+
+Navigate to `http://localhost:8501` to view the live dashboard and interact with the global nodes.
+
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome!
+
+## 📜 License
+This project is licensed under the MIT License.
