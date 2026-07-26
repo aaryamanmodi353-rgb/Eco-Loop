@@ -1,12 +1,12 @@
 # Eco-Loop: Autonomous AI-Driven HVAC Management System
 
-![Eco-Loop Dashboard Chart](assets/dashboard_chart.png)
+![Eco-Loop Dashboard Chart](assets/dashboard.png)
 
 Eco-Loop is a next-generation, closed-loop autonomous system designed to optimize enterprise-scale HVAC (Heating, Ventilation, and Air Conditioning) management. By replacing traditional, rigid PID controllers with an advanced cognitive architecture powered by Llama 3.1, Eco-Loop dynamically analyzes live thermal telemetry, anticipates environmental drift, and actively enforces optimal thermodynamic setpoints.
 
 This architecture achieves significant energy reductions (**18.4% vs. baseline**) while strictly maintaining PMV (Predicted Mean Vote) comfort parameters across a global portfolio of buildings.
 
-![Eco-Loop Dashboard Map](assets/dashboard_map.png)
+![Eco-Loop Dashboard Map](assets/map.png)
 
 ## 🚀 Key Features
 
