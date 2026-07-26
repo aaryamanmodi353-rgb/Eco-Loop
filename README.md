@@ -20,7 +20,11 @@ Eco-Loop operates on three fully decoupled, asynchronous core engines running co
 2.  **AI Orchestrator (`agent.py`)**: Senses the state, evaluates thermal drift using Chain-of-Thought, and acts via Tool Calling.
 3.  **Command & Control Dashboard (`app.py`)**: The interactive Streamlit frontend.
 
-> For a complete architectural breakdown and data flow diagram, see the [Architecture Document](architecture_document.md).
+> For a complete architectural breakdown and data flow diagram, see the [System Architecture Document](System_Architecture.md).
+
+## 🎥 PoC Demonstration Video
+Watch the full Proof-of-Concept video demonstrating Eco-Loop in action—highlighting the live telemetry feed, real-time agentic tool-calling, and dynamic closed-loop control:
+🔗 **[Watch on Google Drive](https://drive.google.com/file/d/11SZqyKlqgRkw0iyb9GH1mAXQGWcmlcXZ/view?usp=sharing)**
 
 ## 🛠️ Setup & Installation
 
