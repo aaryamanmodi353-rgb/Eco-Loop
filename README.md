@@ -26,6 +26,17 @@ Eco-Loop operates on three fully decoupled, asynchronous core engines running co
 
 > For a complete architectural breakdown and data flow diagram, see the [System Architecture Document](System_Architecture.md).
 
+## 🧰 Technologies Used
+
+| Category | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Cognitive Engine** | **Llama 3.1 (8B)** | Local LLM edge-inference for secure, zero-latency autonomous decision making. |
+| **Agentic Framework** | **LangChain / Ollama** | Orchestrates the Chain-of-Thought reasoning and deterministic Tool Calling execution. |
+| **Physics Simulation** | **EnergyPlus (eppy)** | High-fidelity thermodynamic modeling of the 5-zone global commercial building. |
+| **Frontend UI** | **Streamlit** | Powers the glassmorphic, responsive, and asynchronous Command & Control Dashboard. |
+| **Geospatial & Viz** | **Folium / Plotly** | Renders the interactive global deployment map and the live telemetry trajectory charts. |
+| **Telemetry Bus** | **Local File I/O** | `state.json` and `action.json` enable ultra-low latency, decoupled microservice communication. |
+
 ## 🎥 PoC Demonstration Video
 Watch the full Proof-of-Concept video demonstrating Eco-Loop in action—highlighting the live telemetry feed, real-time agentic tool-calling, and dynamic closed-loop control:
 🔗 **[Watch on Google Drive](https://drive.google.com/file/d/11SZqyKlqgRkw0iyb9GH1mAXQGWcmlcXZ/view?usp=sharing)**
