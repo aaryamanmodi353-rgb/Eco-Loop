@@ -1,28 +1,35 @@
-# Eco-Loop Project: Exhaustive Implementation Summary
+# Eco-Loop System Architecture
 
-This document serves as a strict, highly detailed record of exactly what was built, modified, and fixed in this codebase for the hackathon project. 
+This document outlines the core architectural and strategic decisions implemented in the Eco-Loop AI-driven HVAC management system, specifically addressing the tool-calling framework, prompt engineering, latency management, and data handling.
 
-## 1. Core Physics & AI Integration
-- **EnergyPlus Engine (`ep_runner.py`)**: Configured the EnergyPlus Python API to run a live building thermodynamics simulation. We established hooks to stream real-time zone temperatures (`Zone Mean Air Temperature`) out of the engine.
-- **Autonomous Agent (`agent.py`)**: Implemented a LangChain-powered autonomous loop using the **Llama 3.1** model. The agent ingests the live simulation state and makes autonomous decisions to alter HVAC Heating and Cooling setpoints to maintain a strict thermal comfort band.
-- **State Exchange**: Built a robust JSON-based file exchange (`action.json`) allowing the AI to safely pass execution signals to the running physics engine without race conditions.
+## 1. Tool-Calling Architecture
+Eco-Loop utilizes a local `Llama 3.1 (8B)` model integrated with **LangChain's Tool Calling** capabilities to achieve autonomous closed-loop control. The architecture completely decouples the cognitive layer from the physical simulation engine.
 
-## 2. Enterprise Dashboard Aesthetics (`app.py`)
-- **Glassmorphism UI**: Built a heavily customized Streamlit interface utilizing advanced CSS to create floating, translucent glass cards for KPIs and telemetry data.
-- **Dynamic Light/Dark Mode**: Engineered a robust toggle switch in the sidebar. This injects dynamic raw CSS into the Streamlit DOM to seamlessly transition background colors, text colors, and borders between a sleek dark theme (`#090c10`) and a pristine light theme (`#ffffff`).
-- **Menu Component Caching Fix**: Resolved a deeply-rooted Streamlit caching issue where the `streamlit_option_menu` would refuse to update colors during a theme toggle. We fixed this by dynamically binding the component's `key` to the theme state, forcing a total component rebuild.
-- **UI Cleanup**: Stripped the native Streamlit "Deploy" button and top header by injecting an aggressive `[data-testid="stToolbar"]` CSS hiding rule. Removed the unused "Contact Me" section to streamline the app.
+Instead of generating raw text that requires brittle regex parsing, the LLM is explicitly bound to deterministic Python functions via `@tool` decorators:
+*   `get_building_state()`: Reads the current telemetry from `state.json`.
+*   `set_hvac_setpoints(heating_setpoint, cooling_setpoint)`: Writes the physical actuation payload to `action.json`.
 
-## 3. Interactive Geospatial Map (Folium)
-- **Live Node Telemetry**: Initialized an interactive map displaying 5 core AI-managed zones (New York, London, Tokyo, Sydney, Dubai), dynamically coloring the nodes based on their live thermodynamic deviation from the 21-24°C comfort band.
-- **Dynamic Pin-Drop & Open-Meteo API**: Implemented an interactive click handler. Clicking anywhere on the map triggers an HTTP request to the live **Open-Meteo API**, fetching real-world temperature, humidity, wind speed, and weather conditions for that exact latitude/longitude, and instantly dropping a new AI node.
-- **Click Event Caching Fix**: Fixed a critical `st_folium` state-retention bug where clicking an existing object permanently blocked the ability to drop new pins. We built a custom coordinate-matching algorithm (`abs(lat1 - lat2) < 0.0001`) to intelligently differentiate between a user attempting to delete a node vs dropping a new pin.
+**The Control Loop**: The AI orchestrator (`agent.py`) runs in a continuous `while True` loop. In each iteration, it senses the environment (`state.json`), processes the thermal drift through a Chain-of-Thought, and invokes the `set_hvac_setpoints` tool natively. The EnergyPlus engine (`ep_runner.py`) actively polls `action.json` and adjusts the simulation parameters dynamically.
 
-## 4. Map Tiles & Geographical Polish
-- **Basemap Overhaul**: Ripped out error-prone Esri tiles and natively localized CartoDB tiles. Replaced them with bulletproof **CartoDB Nolabels** tiles (Light and Dark variants) to provide a pristine, label-free canvas.
-- **Custom English Typography**: Because the basemaps were stripped of labels, we mathematically injected the 6 major continent names directly onto the map using Folium `DivIcon` HTML elements. We enforced the dashboard's custom `Inter` font, dialed the `font-weight` to a clean `500`, and dynamically bound their font colors to match the Light/Dark mode toggle.
-- **Infinite Looping Fix**: Injected `no_wrap=True` into the TileLayers to physically prevent the earth from infinitely repeating horizontally.
-- **Zoom Constraints & Void Masking**: 
-  - Removed Leaflet's `max_bounds` parameter to stop it from silently overwriting our zoom locks.
-  - Enforced a strict `min_zoom=2` to physically prevent the user from zooming out into the empty void.
-  - Injected a raw `branca.element.Element` CSS script directly into the Folium HTML root. This targets the absolute bottom `.leaflet-container` canvas layer and forces its background color to perfectly match the Streamlit dashboard (`#090c10` or `#ffffff`). This perfectly masks any elastic "bounce" animations at the edges of the earth, seamlessly blending the map into the UI.
+## 2. Prompt Engineering Strategies
+The system prompt is designed to constrain the LLM to deterministic, physics-informed actions rather than conversational responses. 
+
+**Key Strategies:**
+*   **Role Constraint**: The prompt explicitly defines the agent as an "autonomous Eco-Loop Building Agent" focused strictly on energy minimization and thermal boundaries (21.0°C to 24.0°C).
+*   **Predictive Heuristics**: The prompt injects explicit thermodynamic rules for predictive control. For example: *"Look at the Outdoor_Temp_C. If it's cold outside, use a lower heating setpoint. If it's hot outside, use a higher cooling setpoint."*
+*   **Safety Guardrails**: Hard constraints are embedded in the prompt (e.g., *"CRITICAL RULE: Never let heating setpoint >= cooling setpoint"*) to prevent deadband fighting. This is double-checked by the tool function itself which rejects invalid arguments.
+*   **Chain-of-Thought (CoT) Enforcement**: The prompt is designed to force the model to reason through the temperature drift before executing the tool. This reasoning is captured and streamed to the dashboard via `thoughts.txt` for user transparency.
+
+## 3. Prompt Latency Management
+To ensure the cognitive layer can keep pace with real-time building dynamics and avoid bottlenecking the simulation, latency is aggressively managed through several techniques:
+*   **Edge Inference**: The entire cognitive stack runs locally using Ollama (`llama3.1`), entirely eliminating network round-trip latency associated with cloud APIs.
+*   **Strict Temperature Control**: The LLM is initialized with `temperature=0.1`. This heavily limits the token search space, forcing the model to generate the most probable tokens faster and reducing token generation latency.
+*   **Asynchronous Decoupling**: The Streamlit dashboard (`app.py`), the LLM agent (`agent.py`), and the simulation engine (`ep_runner.py`) run as completely separate background processes. The LLM's inference time never blocks the UI thread or the physics engine's execution loop.
+
+## 4. Handling Lengthy Simulation Logs
+EnergyPlus produces massive amounts of telemetry during an annual simulation run. Feeding these raw logs into an LLM would instantly exceed context windows and cause massive latency.
+
+**Technical Approach:**
+*   **State Condensation**: Instead of passing historical logs, the `ep_runner.py` acts as a data aggregator. It distills the complex building state down to a micro-payload (`state.json`) containing only the *current* crucial parameters (Current Time, Outdoor Temp, and the 5 Zone Temperatures). 
+*   **Stateless Inference**: The LLM evaluates the state completely memorylessly. By only looking at the instantaneous thermal drift and outdoor conditions, the LLM context window remains incredibly small (a few hundred tokens).
+*   **Out-of-Band Historical Storage**: While the LLM only sees instantaneous state, the full telemetry history is written in parallel to `ai_history.csv`. The Streamlit dashboard uses this CSV to render the long-term historical trajectory charts via Plotly, entirely bypassing the LLM.
